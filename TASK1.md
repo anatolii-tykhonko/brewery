@@ -1,3 +1,4 @@
+
 Overview
 Build a Spring Boot application that simulates the brewing of different beer types. The goal is to expose a REST API to initiate and monitor the brewing process, handling errors and batch statuses appropriately.
 
