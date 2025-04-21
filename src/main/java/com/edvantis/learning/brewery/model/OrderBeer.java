@@ -1,5 +1,8 @@
 package com.edvantis.learning.brewery.model;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.*;
 
 @Getter
@@ -7,7 +10,10 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Order {
+@Entity
+@Table(name = "beer order")
+public class OrderBeer {
+    @Id
     private String id;
     private String status;
     private BeerType beerType;

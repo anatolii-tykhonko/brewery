@@ -1,13 +1,16 @@
 package com.edvantis.learning.brewery.service;
 
 import com.edvantis.learning.brewery.DAO.OrderRepository;
+import com.edvantis.learning.brewery.error.QueueException;
 import com.edvantis.learning.brewery.model.BeerType;
-import com.edvantis.learning.brewery.model.Order;
+import com.edvantis.learning.brewery.model.OrderBeer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @RequiredArgsConstructor
@@ -17,48 +20,61 @@ public class OrderService {
     @Autowired
     private final BeerBrewingClient brewingClient;
 
-    public Order getById(String id) {
+    private final ExecutorService executorService = Executors.newFixedThreadPool(3);
+
+    public OrderBeer getById(String id) {
         return repository.findById(id).orElseThrow();
     }
 
-    public List<Order> getAll() {
+    public List<OrderBeer> getAll() {
         return repository.findAll().stream().toList();
     }
 
-    public void save(Order order) {
-        repository.save(order);
+    public void updateStatus(String id, String status){
+        repository.updateStatusById(id, status);
     }
 
-    public void remove(Order order) {
-        repository.save(order);
+    public void save(OrderBeer orderBeer) {
+        repository.save(orderBeer);
     }
 
-    public Order createOrder(String id, BeerType beerType, int amountLiters) {
-        int result;
-        Order orderToSave;
-        try {
-            result = brewingClient.brew(beerType, amountLiters);
-            orderToSave = Order.builder()
-                    .id(id)
-                    .amountInLitres(amountLiters)
-                    .beerType(beerType)
-                    .status("started")
-                    .build();
-            save(orderToSave);
-        } catch (IllegalAccessException e) {
-            orderToSave = Order.builder()
-                    .id(id)
-                    .amountInLitres(amountLiters)
-                    .beerType(beerType)
-                    .status("queued")
-                    .build();
-            save(orderToSave);
+    public void remove(OrderBeer orderBeer) {
+        repository.save(orderBeer);
+    }
+
+    public Optional<UUID> createOrder(BeerType beerType, int amountLiters) {
+        String status = "IN_PROGRESS";
+        UUID id = UUID.randomUUID();
+        OrderBeer orderBeerToSave;
+        orderBeerToSave = OrderBeer.builder()
+                .id(String.valueOf(id))
+                .amountInLitres(amountLiters)
+                .beerType(beerType)
+                .status(status)
+                .build();
+        if(brewingClient.isBeerBrewed(beerType)){
+            status = "QUEUED";
+            orderBeerToSave.setStatus(status);
+            save(orderBeerToSave);
+            return Optional.empty();
         }
-        return orderToSave;
+        executorService.execute(() -> {
+            try {
+                brewingClient.brew(beerType, amountLiters);
+                updateStatus(String.valueOf(id), "COMPLETED");
+            } catch (IllegalStateException e) {
+                updateStatus(String.valueOf(id), "SPOILED");
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
+        save(orderBeerToSave);
+        return Optional.of(id);
     }
 
 
     public String checkStatus(String id) {
-        return null;
+        return getById(id).getStatus();
     }
 }

@@ -1,6 +1,7 @@
 package com.edvantis.learning.brewery.service;
 
 import com.edvantis.learning.brewery.model.BeerType;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -41,7 +42,6 @@ public class BeerBrewingClient {
             }
 
             System.out.println("Finished brewing " + amountInLitres + " litres of " + beerType);
-            return amountInLitres;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         } finally {
@@ -49,5 +49,10 @@ public class BeerBrewingClient {
                 brewingBeerTypes.remove(beerType);
             }
         }
+        return amountInLitres;
+    }
+
+    public boolean isBeerBrewed(BeerType beerType) {
+        return brewingBeerTypes.contains(beerType);
     }
 }
