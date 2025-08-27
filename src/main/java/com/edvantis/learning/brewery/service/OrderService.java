@@ -6,11 +6,14 @@ import com.edvantis.learning.brewery.model.BeerType;
 import com.edvantis.learning.brewery.model.OrderBeer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @Service
 @RequiredArgsConstructor
@@ -20,8 +23,6 @@ public class OrderService {
     @Autowired
     private final BeerBrewingClient brewingClient;
 
-    private final ExecutorService executorService = Executors.newFixedThreadPool(3);
-
     public OrderBeer getById(String id) {
         return repository.findById(id).orElseThrow();
     }
@@ -30,7 +31,7 @@ public class OrderService {
         return repository.findAll().stream().toList();
     }
 
-    public void updateStatus(String id, String status){
+    public void updateStatus(String id, String status) {
         repository.updateStatusById(id, status);
     }
 
@@ -42,9 +43,9 @@ public class OrderService {
         repository.save(orderBeer);
     }
 
-    public Optional<UUID> createOrder(BeerType beerType, int amountLiters) {
+    @Async
+    public void createOrder(BeerType beerType, int amountLiters, UUID id) {
         String status = "IN_PROGRESS";
-        UUID id = UUID.randomUUID();
         OrderBeer orderBeerToSave;
         orderBeerToSave = OrderBeer.builder()
                 .id(String.valueOf(id))
@@ -52,25 +53,20 @@ public class OrderService {
                 .beerType(beerType)
                 .status(status)
                 .build();
-        if(brewingClient.isBeerBrewed(beerType)){
+        if (brewingClient.isBeerBrewed(beerType)) {
             status = "QUEUED";
             orderBeerToSave.setStatus(status);
             save(orderBeerToSave);
-            return Optional.empty();
         }
-        executorService.execute(() -> {
-            try {
-                brewingClient.brew(beerType, amountLiters);
-                updateStatus(String.valueOf(id), "COMPLETED");
-            } catch (IllegalStateException e) {
-                updateStatus(String.valueOf(id), "SPOILED");
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-
-        });
+        try {
+            brewingClient.brew(beerType, amountLiters);
+            orderBeerToSave.setStatus("COMPLETED");
+        } catch (IllegalStateException e) {
+            orderBeerToSave.setStatus("SPOILED");
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
         save(orderBeerToSave);
-        return Optional.of(id);
     }
 
 
